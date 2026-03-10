@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test</title>
+</head>
+<body>
+    <h1>Login Test</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testLogin() {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('/api/agents/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'john@leadpulse.com',
+                        password: 'password123'
+                    })
+                });
+                
+                resultEl.textContent = `Status: ${response.status}\n`;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultEl.textContent += 'SUCCESS!\n' + JSON.stringify(data, null, 2);
+                } else {
+                    const error = await response.text();
+                    resultEl.textContent += 'FAILED!\n' + error;
+                }
+            } catch (error) {
+                resultEl.textContent = 'ERROR: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

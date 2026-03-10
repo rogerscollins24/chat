@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: chat-app-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: sh -c 'python init_db.py || true; python create_super_admin.py || true'
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: starter
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      - key: LOG_LEVEL
+        value: info
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chat-db
+          property: connectionString
+
+      - key: CORS_ORIGINS
+        value: https://chat-app-frontend.onrender.com
+
+  - type: web
+    name: chat-app-frontend
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npx serve -s dist -l $PORT
+    envVars:
+      - key: VITE_API_URL
+        value: https://chat-app-backend-am3f.onrender.com
+
+      - key: VITE_ENVIRONMENT
+        value: production
+
+databases:
+  - name: chat-db
+    plan: free

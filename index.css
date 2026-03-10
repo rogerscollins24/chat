@@ -1,0 +1,25 @@
+/* LeadPulse Chat System Styles */
+
+:root {
+  --primary: #3b82f6;
+  --secondary: #10b981;
+  --accent: #f59e0b;
+  --bg: #f9fafb;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg);
+  color: #1f2937;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}

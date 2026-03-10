@@ -1,0 +1,8 @@
+{
+  "name": "AdConnect Chat Hub",
+  "description": "A high-performance two-sided chat platform designed for ad-driven lead generation, featuring a customer-facing portal and a powerful AI-assisted agent dashboard.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
