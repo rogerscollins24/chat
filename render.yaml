@@ -23,7 +23,7 @@ services:
           property: connectionString
 
       - key: CORS_ORIGINS
-        value: https://chat-app-frontend.onrender.com
+        value: https://chat-app-frontend-zslv.onrender.com
 
   - type: web
     name: chat-app-frontend
