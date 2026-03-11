@@ -16,15 +16,15 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
  */
 
   // WebSocket connection for real-time updates
+  useEffect(() => {
+    if (!isAuthenticated || !currentAgent) {
+      if (ws) {
+        ws.close();
+        setWs(null);
+      }
+      return;
+    }
 
-const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message, isMe }) => (
-  <div className={`flex w-full mb-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
-    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm shadow-sm transition-all ${
-      message.isInternal 
-        ? 'bg-amber-50 border border-amber-200 text-amber-900 italic mx-auto w-[90%] rounded-lg text-center'
-        : isMe 
-          ? 'bg-blue-600 text-white rounded-br-none' 
-          : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
     const token = api.getAuthToken();
     const rawApiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
     const normalizedApiUrl = rawApiUrl && !rawApiUrl.endsWith('/api') ? `${rawApiUrl}/api` : rawApiUrl;
@@ -40,11 +40,21 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
     let reconnectTimer: number | undefined;
     let closed = false;
     let hasOpened = false;
+    let activeSocket: WebSocket | null = null;
+
+    const scheduleReconnect = () => {
+      if (closed) return;
+      const baseDelay = Math.min(30000, 1000 * Math.pow(2, retryCount));
+      const jitter = Math.floor(Math.random() * 300);
+      const delay = baseDelay + jitter;
+      retryCount += 1;
+      reconnectTimer = window.setTimeout(connect, delay);
+    };
 
     const connect = () => {
       if (closed) return;
-
       const websocket = new WebSocket(wsUrl);
+      activeSocket = websocket;
 
       websocket.onopen = () => {
         hasOpened = true;
@@ -102,15 +112,6 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
         }
       };
 
-      const scheduleReconnect = () => {
-        if (closed) return;
-        const baseDelay = Math.min(30000, 1000 * Math.pow(2, retryCount));
-        const jitter = Math.floor(Math.random() * 300);
-        const delay = baseDelay + jitter;
-        retryCount += 1;
-        reconnectTimer = window.setTimeout(connect, delay);
-      };
-
       websocket.onclose = () => {
         setWs(prev => (prev === websocket ? null : prev));
         if (!closed) {
@@ -134,11 +135,11 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
-      if (ws) {
-        ws.close();
+      if (activeSocket) {
+        activeSocket.close();
       }
     };
-    if (templateLimitReached) {
+  }, [isAuthenticated, currentAgent]);
       setTemplateActionError('Maximum of 5 templates reached');
       return;
     }
@@ -178,7 +179,7 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
       const matchesFilter = filter === 'ALL' || s.status === filter;
-      const matchesSearch = s.userName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = s.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             s.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesFilter && matchesSearch;
     });
@@ -234,9 +235,9 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
           
           {currentAgent && <AgentShareLink agent={currentAgent} />}
           
-          <input 
-            type="text" 
-            placeholder="Search active leads..." 
+          <input
+            type="text"
+            placeholder="Search active leads..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-gray-100 border-none rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
@@ -245,7 +246,7 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
 
         <div className="flex border-b border-gray-200 bg-white text-[10px] font-bold uppercase tracking-wider text-gray-400">
           {(['OPEN', 'RESOLVED', 'ALL'] as const).map(f => (
-            <button 
+            <button
               key={f}
               onClick={() => setFilter(f)}
               className={`flex-1 py-3 text-center transition-colors border-b-2 ${filter === f ? 'border-blue-600 text-blue-600' : 'border-transparent hover:text-gray-600'}`}
