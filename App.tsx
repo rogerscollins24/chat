@@ -140,6 +140,10 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
       }
     };
   }, [isAuthenticated, currentAgent]);
+
+  const handleTemplateSave = async () => {
+    if (!templateInput.trim()) return;
+    if (templateLimitReached) {
       setTemplateActionError('Maximum of 5 templates reached');
       return;
     }
