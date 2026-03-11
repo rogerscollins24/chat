@@ -15,7 +15,7 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
  * In a real deployment, these could be separate apps sharing this codebase.
  */
 
-// --- Shared UI Components ---
+  // WebSocket connection for real-time updates
 
 const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message, isMe }) => (
   <div className={`flex w-full mb-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -25,100 +25,119 @@ const MessageBubble: React.FC<{ message: Message; isMe: boolean }> = ({ message,
         : isMe 
           ? 'bg-blue-600 text-white rounded-br-none' 
           : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
-    }`}>
-      {message.isInternal && <span className="block text-[9px] uppercase font-bold tracking-widest text-amber-500 mb-1">Internal Note</span>}
-      {message.text}
-      <div className={`text-[10px] mt-1 ${isMe ? 'text-blue-100' : 'text-gray-400'}`}>
-        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </div>
-    </div>
-  </div>
-);
+    const token = api.getAuthToken();
+    const rawApiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const normalizedApiUrl = rawApiUrl && !rawApiUrl.endsWith('/api') ? `${rawApiUrl}/api` : rawApiUrl;
+    const wsBase = normalizedApiUrl
+      ? normalizedApiUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api`;
 
-// --- User/Client Interface ---
+    const wsUrl = token
+      ? `${wsBase}/ws?token=${encodeURIComponent(token)}`
+      : `${wsBase}/ws`;
 
-const UserChatView: React.FC<{
-  session: ChatSession;
-  onSendMessage: (text: string) => void;
-}> = ({ session, onSendMessage }) => {
-  const [input, setInput] = useState('');
+    let retryCount = 0;
+    let reconnectTimer: number | undefined;
+    let closed = false;
+    let hasOpened = false;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    onSendMessage(input);
-    setInput('');
-  };
+    const connect = () => {
+      if (closed) return;
 
-  return (
-    <div className="flex flex-col h-screen w-full max-w-lg mx-auto bg-gray-50 md:border-x border-gray-200 md:shadow-xl overflow-hidden">
-      <div className="bg-white border-b border-gray-200 p-3 md:p-4 flex items-center space-x-3 sticky top-0 z-10">
-        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">S</div>
-        <div>
-          <h2 className="font-semibold text-gray-800">Sales Support</h2>
-          <div className="flex items-center space-x-1">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            <span className="text-xs text-gray-500">Agent Online</span>
-          </div>
-        </div>
-      </div>
+      const websocket = new WebSocket(wsUrl);
 
-      <div className="flex-1 overflow-y-auto p-3 md:p-4 flex flex-col no-scrollbar bg-white">
-        <div className="text-center my-4 md:my-6">
-          <span className="text-[10px] md:text-[11px] text-gray-400 bg-gray-100 px-2 md:px-3 py-1 rounded-full uppercase tracking-wider">
-            Lead Source: {session.adSource || 'Direct'}
-          </span>
-        </div>
-        {session.messages.filter(m => !m.isInternal).map((msg) => (
-          <MessageBubble key={msg.id} message={msg} isMe={msg.senderRole === 'USER'} />
-        ))}
-      </div>
+      websocket.onopen = () => {
+        hasOpened = true;
+        retryCount = 0;
+        websocket.send(JSON.stringify({
+          type: 'subscribe',
+          agent_id: currentAgent.id
+        }));
+        setWs(websocket);
+      };
 
-      <form onSubmit={handleSubmit} className="p-3 md:p-4 bg-white border-t border-gray-200 flex space-x-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask us anything..."
-          className="flex-1 bg-gray-100 border-none rounded-full px-3 md:px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-        />
-        <button type="submit" disabled={!input.trim()} className="bg-blue-600 text-white p-2 md:p-2.5 rounded-full hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shrink-0">
-          <SendIcon className="w-4 h-4 md:w-5 md:h-5" />
-        </button>
-      </form>
-    </div>
-  );
-};
+      websocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
 
-// --- Agent/Internal Interface ---
+          if (data.type === 'message') {
+            const messageData = data.data;
+            const backendSessionId = messageData.session_id;
+            const sessionId = `backend-${backendSessionId}`;
 
-const AdminDashboard: React.FC<{
-  sessions: ChatSession[];
-  activeSessionId: string | null;
-  onSelectSession: (id: string) => void;
-  onSendMessage: (sessionId: string, text: string, isInternal?: boolean) => void;
-  onUpdateStatus: (sessionId: string, status: SessionStatus) => void;
-  currentAgent?: any;
-  onLogout?: () => void;
-  templates: api.MessageTemplate[];
-  templatesLoading: boolean;
-  templateLoadError: string | null;
-  onCreateTemplate: (text: string) => Promise<void>;
-  onDeleteTemplate: (templateId: number) => Promise<void>;
-}> = ({ sessions, activeSessionId, onSelectSession, onSendMessage, onUpdateStatus, currentAgent, onLogout, templates = [], templatesLoading, templateLoadError, onCreateTemplate, onDeleteTemplate }) => {
-  const [input, setInput] = useState('');
-  const [filter, setFilter] = useState<SessionStatus | 'ALL'>('OPEN');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isInternalMode, setIsInternalMode] = useState(false);
-  const [templateInput, setTemplateInput] = useState('');
-  const [templateSaving, setTemplateSaving] = useState(false);
-  const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null);
-  const [templateActionError, setTemplateActionError] = useState<string | null>(null);
-  const templateList = templates;
-  const templateLimitReached = templateList.length >= 5;
+            // Store in localStorage to trigger other tabs
+            localStorage.setItem('ws_message', JSON.stringify({
+              sessionId,
+              messageData,
+              timestamp: Date.now()
+            }));
 
-  const handleTemplateSave = async () => {
-    if (!templateInput.trim()) return;
+            // Add or update message in the session
+            setSessions(prev => prev.map(session => {
+              if (session.id === sessionId) {
+                const newMessage: Message = {
+                  id: `m-${messageData.id}`,
+                  senderId: messageData.sender_id,
+                  senderRole: messageData.sender_role as Role,
+                  text: messageData.text,
+                  timestamp: new Date(messageData.timestamp).getTime(),
+                  status: 'sent',
+                  isInternal: messageData.is_internal || false
+                };
+                return {
+                  ...session,
+                  messages: [...session.messages, newMessage],
+                  lastMessage: newMessage.text,
+                  updatedAt: Date.now(),
+                  unreadCount: session.id === currentSessionId ? 0 : session.unreadCount + 1
+                };
+              }
+              return session;
+            }));
+          } else if (data.type === 'session_created') {
+            loadBackendSessions();
+          }
+        } catch (error) {
+          // Error processing WebSocket message
+        }
+      };
+
+      const scheduleReconnect = () => {
+        if (closed) return;
+        const baseDelay = Math.min(30000, 1000 * Math.pow(2, retryCount));
+        const jitter = Math.floor(Math.random() * 300);
+        const delay = baseDelay + jitter;
+        retryCount += 1;
+        reconnectTimer = window.setTimeout(connect, delay);
+      };
+
+      websocket.onclose = () => {
+        setWs(prev => (prev === websocket ? null : prev));
+        if (!closed) {
+          scheduleReconnect();
+        }
+      };
+
+      websocket.onerror = () => {
+        setWs(prev => (prev === websocket ? null : prev));
+        if (!closed && !hasOpened) {
+          scheduleReconnect();
+        }
+      };
+    };
+
+    // Small delay helps avoid cold-start WebSocket failures.
+    reconnectTimer = window.setTimeout(connect, 1500);
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (ws) {
+        ws.close();
+      }
+    };
     if (templateLimitReached) {
       setTemplateActionError('Maximum of 5 templates reached');
       return;

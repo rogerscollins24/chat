@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* LeadPulse Chat System Styles */
 
 :root {
